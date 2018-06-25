@@ -73,15 +73,23 @@ def parse_tensors_dict(graph, layer_name, value_feed_dict):
         # creating feed_dict and find input tensors
         X_in = None
 
+
+        # modified by brick here, what if the graph didnt use placeholder at all?
         # find tensors of value_feed_dict
         # in current graph by name
         for key_op, value in iteritems(value_feed_dict):
-            tmp = get_tensor(graph = g, name = key_op.name)
+            tmp = get_tensor(graph=g, name=key_op.name)
             feed_dict[tmp] = value
             x.append(tmp)
 
-        X_in = x[0]
-        feed_dict[X_in] = feed_dict[X_in][:config["MAX_IMAGES"]] # only taking first MAX_IMAGES from given images array
+        # brick 这里就很欢乐了，这里默认第一个就是图，如果说根本就没用feed_dict的话，这里就报错崩了，估计作者没遇到过没用feed_dict的情况
+        # 因为这里是按照feed_dict的顺序挨个从sess里面读取tensor，然而我根本没用feed_dict，开心又愉快啊
+        if len(x) > 0: # brick add
+            X_in = x[0]
+            feed_dict[X_in] = feed_dict[X_in][:config["MAX_IMAGES"]] # only taking first MAX_IMAGES from given images array
+        else: # brick add
+            X_in = None # brick add
+        # end brick
     return op_tensor, x, X_in, feed_dict
 
 
@@ -128,6 +136,8 @@ def _write_activation(activations, layer, path_outdir, path_logdir):
         finally:
             file_writer.close() # close file writer
     return is_success
+
+
 def _write_deconv(images, layer, path_outdir, path_logdir):
     is_success = True
 

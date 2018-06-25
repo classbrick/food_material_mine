@@ -180,6 +180,7 @@ def _graph_import_function(PATH, sess):
     new_saver.restore(sess, tf.train.latest_checkpoint(os.path.dirname(PATH)))
     return sess
 
+
 def _visualization_by_layer_type(graph, value_feed_dict, input_tensor, layer_type, method, path_logdir, path_outdir):
     """
     Generate filter visualization from the layers which are of type layer_type
@@ -226,8 +227,10 @@ def _visualization_by_layer_type(graph, value_feed_dict, input_tensor, layer_typ
             layers.append(i.name)
 
     for layer in layers:
-        is_success = _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer, method, path_logdir, path_outdir)
+        is_success = _visualization_by_layer_name(
+            graph, value_feed_dict, input_tensor, layer, method, path_logdir, path_outdir)
     return is_success
+
 
 def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_name, method, path_logdir, path_outdir):
     """
@@ -270,18 +273,21 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
         print('Error, the graph input is not the graph of the current session!!')
     # try:
     parsed_tensors = parse_tensors_dict(graph, layer_name, value_feed_dict)
-    if parsed_tensors == None:
-        return is_success
+    # brick 这两句代码有点迷， 注释了
+    # if parsed_tensors is None:
+    #    return is_success
 
+    # 这里也有点问题，x在后面根本没用，X_in是获取的x[0]，加了判断之后完全可能为None
     op_tensor, x, X_in, feed_dict = parsed_tensors
 
     is_deep_dream = True
-    #is_valid_sess = True
+    # is_valid_sess = True
     with graph.as_default():
         # computing reconstruction
         X = X_in
+        # 最后算了一堆，这里又把X给重新赋值了，又是一个奇怪的代码
         if input_tensor != None:
-            X = get_tensor(graph = graph, name = input_tensor.name)
+            X = get_tensor(graph=graph, name=input_tensor.name)
         # original_images = sess.run(X, feed_dict = feed_dict)
 
         results = None
@@ -301,8 +307,9 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
     # 	print("No Layer with layer name = %s" % (layer_name))
     # 	return is_success
 
+    # brick这里的is_deep_dream一直都是True
     if is_deep_dream:
-        is_success = write_results(results, layer_name, path_outdir, path_logdir, method = method)
+        is_success = write_results(results, layer_name, path_outdir, path_logdir, method=method)
 
     start += time.time()
     print("Reconstruction Completed for %s layer. Time taken = %f s" % (layer_name, start))
@@ -312,6 +319,9 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
 
 # computing visualizations
 def _activation(graph, sess, op_tensor, feed_dict):
+    # brick 这里加一点，如果feed_dict是没有的话，那就把它设置为None
+    if len(feed_dict) == 0:
+        feed_dict = None
     with graph.as_default() as g:
         with sess.as_default() as sess:
             act = sess.run(op_tensor, feed_dict = feed_dict)
@@ -408,6 +418,7 @@ def activation_visualization(sess_graph_path, value_feed_dict, input_tensor = No
     is_success = _get_visualization(sess_graph_path, value_feed_dict, input_tensor = input_tensor, layers = layers, method = "act",
         path_logdir = path_logdir, path_outdir = path_outdir)
     return is_success
+
 def deconv_visualization(sess_graph_path, value_feed_dict, input_tensor = None,  layers = 'r', path_logdir = './Log', path_outdir = "./Output"):
     is_success = _get_visualization(sess_graph_path, value_feed_dict, input_tensor = input_tensor, layers = layers, method = "deconv",
         path_logdir = path_logdir, path_outdir = path_outdir)
