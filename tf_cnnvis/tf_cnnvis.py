@@ -16,13 +16,12 @@ from skimage.restoration import denoise_tv_bregman
 from .utils import *
 from .utils import config
 
-
 is_Registered = False # prevent duplicate gradient registration
 # map from keyword to layer type
 dict_layer = {'r' : "relu", 'p' : 'maxpool', 'c' : 'conv2d'}
 units = None
 
-configProto = tf.ConfigProto(allow_soft_placement = True)
+configProto = tf.ConfigProto(allow_soft_placement=True)
 
 # register custom gradients
 def _register_custom_gradients():
@@ -159,10 +158,11 @@ def _get_visualization(sess_graph_path, value_feed_dict, input_tensor, layers, p
                 s = _graph_import_function(PATH,s)
 
             if not isinstance(layers, list):
-                layers =[layers]
+                layers = [layers]
 
             for layer in layers:
                 if layer != None and layer.lower() not in dict_layer.keys():
+                    # 这里的layer
                     is_success = _visualization_by_layer_name(
                         g, value_feed_dict, input_tensor, layer, method, path_logdir, path_outdir)
                 elif layer != None and layer.lower() in dict_layer.keys():
@@ -273,11 +273,12 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
         print('Error, the graph input is not the graph of the current session!!')
     # try:
     parsed_tensors = parse_tensors_dict(graph, layer_name, value_feed_dict)
-    # brick 这两句代码有点迷， 注释了
+    # brick 这两句代码不知道作用， 注释了
     # if parsed_tensors is None:
     #    return is_success
 
-    # 这里也有点问题，x在后面根本没用，X_in是获取的x[0]，加了判断之后完全可能为None
+    # 这里也有点问题，x在后面根本没用，X_in是获取的x[0]，加了判断之后完全可能为None，同时如果input_tensor不为None的
+    # 话，这里的x与X_in都没用
     op_tensor, x, X_in, feed_dict = parsed_tensors
 
     is_deep_dream = True
@@ -285,10 +286,14 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
     with graph.as_default():
         # computing reconstruction
         X = X_in
-        # 最后算了一堆，这里又把X给重新赋值了，又是一个奇怪的代码
+        # 最后算了一堆，这里又把X给重新赋值了，又是一个有一定问题的代码
         if input_tensor != None:
             X = get_tensor(graph=graph, name=input_tensor.name)
         # original_images = sess.run(X, feed_dict = feed_dict)
+        # show_img = original_images[0]
+        # show_img = show_img
+        # show_img = abs(show_img) / 256.0
+        # plt.imshow(show_img)
 
         results = None
         if method == "act":
@@ -320,22 +325,36 @@ def _visualization_by_layer_name(graph, value_feed_dict, input_tensor, layer_nam
 # computing visualizations
 def _activation(graph, sess, op_tensor, feed_dict):
     # brick 这里加一点，如果feed_dict是没有的话，那就把它设置为None
+    is_None = False
     if len(feed_dict) == 0:
         feed_dict = None
+        is_None = True
     with graph.as_default() as g:
         with sess.as_default() as sess:
             act = sess.run(op_tensor, feed_dict = feed_dict)
     return act
 def _deconvolution(graph, sess, op_tensor, X, feed_dict):
+    is_None = False
+    if len(feed_dict) == 0:
+        is_None = True
+        feed_dict={}
     out = []
     with graph.as_default() as g:
         # get shape of tensor
         tensor_shape = op_tensor.get_shape().as_list()
 
+        # 这里的featuremap的作用：定义为placeholder，实际上是每次取不同的batch
+        # 这里两次tanspose的作用，第一次转置替换了channel与batch，然后取出一个channel，再转回batch
+        # 这里的梯度计算，通过一个channel的op_tensor来对X进行求导
         with sess.as_default() as sess:
             # creating placeholders to pass featuremaps and
             # creating gradient ops
             featuremap = [tf.placeholder(tf.int32) for i in range(config["N"])]
+            temp1 = tf.transpose(op_tensor)
+            temp2_1 = featuremap[0]
+            temp2 = temp1[featuremap[0]]
+            temp3 = tf.transpose(temp2)
+            temp4 = tf.gradients(temp3, X)[0]
             reconstruct = [tf.gradients(tf.transpose(
                 tf.transpose(op_tensor)[featuremap[i]]), X)[0] for i in range(config["N"])]
 
@@ -349,19 +368,21 @@ def _deconvolution(graph, sess, op_tensor, X, feed_dict):
                 if c > 0:
                     out.extend(sess.run(reconstruct[:c], feed_dict=feed_dict))
     return out
+
+
 def _deepdream(graph, sess, op_tensor, X, feed_dict, layer, path_outdir, path_logdir):
     tensor_shape = op_tensor.get_shape().as_list()
 
     with graph.as_default() as g:
         n = (config["N"] + 1) // 2
-        feature_map = tf.placeholder(dtype = tf.int32)
-        tmp1 = tf.reduce_mean(tf.multiply(tf.gather(tf.transpose(op_tensor),feature_map),tf.diag(tf.ones_like(feature_map, dtype = tf.float32))), axis = 0)
-        tmp2 = 1e-3 * tf.reduce_mean(tf.square(X), axis = (1, 2 ,3))
+        feature_map = tf.placeholder(dtype=tf.int32)
+        tmp1 = tf.reduce_mean(tf.multiply(tf.gather(tf.transpose(op_tensor), feature_map), tf.diag(tf.ones_like(feature_map, dtype=tf.float32))), axis=0)
+        tmp2 = 1e-3 * tf.reduce_mean(tf.square(X), axis=(1, 2, 3))
         tmp = tmp1 - tmp2
-        t_grad = tf.gradients(ys = tmp, xs = X)[0]
+        t_grad = tf.gradients(ys=tmp, xs=X)[0]
 
         with sess.as_default() as sess:
-            input_shape = sess.run(tf.shape(X), feed_dict = feed_dict)
+            input_shape = sess.run(tf.shape(X), feed_dict=feed_dict)
             tile_size = input_shape[1 : 3]
             channels = input_shape[3]
 

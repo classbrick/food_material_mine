@@ -24,6 +24,7 @@ import shutil
 import tf_cnnvis.tf_cnnvis as tf_cnnvis
 import random
 import cv2
+import utils.plot_show as plot_show
 
 
 excel_path = '/home/leo/Documents/chamo/food_material/V1.1.0.0525.xlsx'
@@ -53,7 +54,8 @@ def get_config(config_name):
 
 
 def eval_smooth_show(config_obj, one_pic_path=None, isDeconv=False):
-    test_preprocess_obj=data_preprocessing.test_preprocess.test_preprocess(config_obj.tfrecord_test_addr, config_obj.class_num)
+    test_preprocess_obj=data_preprocessing.test_preprocess.test_preprocess(
+        config_obj.tfrecord_test_addr, config_obj.class_num)
     net_name=config_obj.net_type
     test_net_obj=None
     if net_name=='vgg16':
@@ -71,12 +73,14 @@ def eval_smooth_show(config_obj, one_pic_path=None, isDeconv=False):
     images_test, labels_test = test_preprocess_obj.def_preposess(batch_size=1)
     net_test = test_net_obj.def_net(images_test)
     inputs = tf.sigmoid(net_test)
-    predict = tf.cast(inputs > 0.5, tf.float32)
+    predict = tf.cast(inputs > 0.1, tf.float32)
     accuracy_TOTAL = accu_obj.def_accuracy(net_test, labels_test)
 
     saver = tf.train.Saver()
     img_mean = utils.global_var.means
     sess = tf.Session()
+
+    writer = tf.summary.FileWriter("Log/", tf.get_default_graph())
     with sess.as_default():
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
@@ -93,11 +97,11 @@ def eval_smooth_show(config_obj, one_pic_path=None, isDeconv=False):
                     mat_show.append(data_scraping.materil_name_73.material_list[i])
                     print(str(data_scraping.materil_name_73.material_list[i]))
             print(predict_v[k])
-            show_img=images_test_v[k]
-            show_img=show_img+img_mean
+            show_img = images_test_v[k]
+            show_img = show_img+img_mean
             show_img = abs(show_img) / 256.0
             plt.imshow(show_img)
-            #zhfont = matplotlib.font_manager.FontProperties(
+            # zhfont = matplotlib.font_manager.FontProperties(
             # fname='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
             for i in range(len(mat_show)):
                 plt.text(150, 25*(i+1), str(mat_show[i]), fontproperties='Simhei', fontsize=15, color='red')
@@ -105,24 +109,13 @@ def eval_smooth_show(config_obj, one_pic_path=None, isDeconv=False):
 
         coord.request_stop()
         coord.join(threads)
+    writer.close()
     if isDeconv:
-        X = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
-        image = read_a_pic(one_pic_path)
-        image = list(image)
-        image_list=[]
-        image_list.append(image)
-        show_cnnvis(sess, feed_dict={X: image_list}, x_image=images_test)
+        #show_cnnvis(sess, feed_dict={X: image_list, Y: tempY}, input_tensor=images_test)
+        show_cnnvis(sess, feed_dict={}, input_tensor=images_test)
 
 
-def eval_smooth(config_name, repeat_time):
-    config_name = config_name
-    print('choose config: ' + config_name)
-    config_obj = None
-    if config_name == 'chamo':
-        config_obj = config.chamo.get_config()
-    elif config_name == 'chamo_full_run':
-        config_obj = config.chamo_full_run.get_config()
-
+def eval_smooth(config_obj, repeat_time, threshold=0.5):
     test_preprocess_obj = data_preprocessing.test_preprocess.test_preprocess(config_obj.tfrecord_test_addr,
                                                                              config_obj.class_num)
     net_name = config_obj.net_type
@@ -142,17 +135,17 @@ def eval_smooth(config_name, repeat_time):
     images_test, labels_test = test_preprocess_obj.def_preposess()
     net_test = test_net_obj.def_net(images_test)
     inputs = tf.sigmoid(net_test)
-    predict = tf.cast(inputs > 0.5, tf.float32)
+    predict = tf.cast(inputs > threshold, tf.float32)
     accuracy_perfect, accuracy, precision, recall, f1, acc_list, \
         pre_list, pre_list_nume, pre_list_deno, rec_list, \
-        rec_list_nume, rec_list_deno = accu_obj.def_accuracy(net_test, labels_test)
+        rec_list_nume, rec_list_deno = accu_obj.def_accuracy(net_test, labels_test, threshold)
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
         saver.restore(sess, config_obj.result_addr)
-
+        sess.graph.finalize()
         # len_all = len(labels_test)
         each_size = labels_test.get_shape().as_list()[0]
         len_all = labels_test.get_shape().as_list()[1]
@@ -161,6 +154,7 @@ def eval_smooth(config_name, repeat_time):
         acc_all = 0.0
         precision_all = 0.0
         recall_all = 0.0
+        f1_all = 0.0
 
         acc_list_all = np.zeros(shape=[len_all], dtype=np.float32)
         precision_all_nume = np.zeros(shape=[len_all], dtype=np.float32)
@@ -169,9 +163,9 @@ def eval_smooth(config_name, repeat_time):
         recall_all_deno = np.zeros(shape=[len_all], dtype=np.float32)
 
         for repeat_i in range(1, repeat_time+1):
-            accuracy_perfect_v, accuracy_v, precision_v, recall_v, acc_list_v, pre_list_nume_v, pre_list_deno_v, \
+            accuracy_perfect_v, accuracy_v, precision_v, recall_v, f1_v, acc_list_v, pre_list_nume_v, pre_list_deno_v, \
             rec_list_nume_v, rec_list_deno_v, predict_v, labels_test_v, images_test_v = sess.run(
-                [accuracy_perfect, accuracy, precision, recall, acc_list,
+                [accuracy_perfect, accuracy, precision, recall, f1, acc_list,
                  pre_list_nume, pre_list_deno, rec_list_nume, rec_list_deno, predict, labels_test,
                  images_test])
 
@@ -179,6 +173,7 @@ def eval_smooth(config_name, repeat_time):
             acc_all = acc_all + accuracy_v
             precision_all = precision_all + precision_v
             recall_all = recall_all + recall_v
+            f1_all = f1_all + f1_v
 
             acc_list_all = np.nan_to_num(acc_list_all) + acc_list_v
             precision_all_nume = precision_all_nume + pre_list_nume_v
@@ -192,6 +187,7 @@ def eval_smooth(config_name, repeat_time):
             print('accuracy_v: ', acc_all/repeat_i)
             print('precision:', precision_all/repeat_i)
             print('recall:', recall_all/repeat_i)
+            print('f1:', f1_all/repeat_i)
             print('acc_list_v:', acc_list_all/repeat_i)
             print('pre_list_v:', precision_all_nume/precision_all_deno)
             print('rec_list_v:', recall_all_nume/recall_all_deno)
@@ -203,10 +199,11 @@ def eval_smooth(config_name, repeat_time):
     acc_all = acc_all/repeat_time
     precision_all = precision_all/repeat_time
     recall_all = recall_all/repeat_time
+    f1_all = f1_all/repeat_time
     acc_list_all = acc_list_all/repeat_time
     precision_list_all = precision_all_nume/precision_all_deno
     recall_list_all = recall_all_nume/recall_all_deno
-    return acc_perfect_all, acc_all, precision_all, recall_all, acc_list_all, precision_list_all, recall_list_all
+    return acc_perfect_all, acc_all, precision_all, recall_all, f1_all, acc_list_all, precision_list_all, recall_list_all
 
 
 def eval_smooth_divide(config_obj, des_path, repeat_time):
@@ -333,16 +330,17 @@ def tag_pic_and_save(show_img, tag_list, root_path, correct_tag_list):
     os.remove(temp_path)
 
 
-def show_cnnvis(sess, feed_dict, x_image):
+def show_cnnvis(sess, feed_dict, input_tensor):
     # deconv visualization
     layers = ["r", "p", "c"]
     total_time = 0
 
     start = time.time()
-    is_success = tf_cnnvis.deconv_visualization(sess_graph_path=sess, value_feed_dict=feed_dict,
-                                      input_tensor=x_image, layers=layers,
-                                      path_logdir=os.path.join("Log", "MobilenetV2"),
-                                      path_outdir=os.path.join("Output", "MobilenetV2"))
+    is_success = tf_cnnvis.deconv_visualization(
+        sess_graph_path=sess, value_feed_dict=feed_dict,
+        input_tensor=input_tensor, layers=layers,
+        path_logdir=os.path.join("Log", "MobilenetV2"),
+        path_outdir=os.path.join("Output", "MobilenetV2"))
     start = time.time() - start
     print("Total Time = %f" % (start))
 
@@ -399,11 +397,36 @@ def read_a_pic(pic_path):
     img = cv2.resize(img, dsize=(224, 224))
     return img
 
+
 def rand_tag_pic(pic_path, num):
     randnamebase = 'test' + str(time.time()) + '_' + str(num) + '_' + 'test.jpg'
     randname = os.path.dirname(pic_path) + '/' + randnamebase
     os.rename(pic_path, randname)
     return randname
+
+
+def threshold_show():
+    x_list = []
+    acc_list = []
+    pre_list = []
+    rec_list = []
+    f1_list = []
+    y_list = []
+    for i in range(1, 100, 1):
+        x = i / 100.0
+        print('threshold:', x)
+        acc_perfect_all, acc_all, precision_all, recall_all, f1_all, acc_list_all, precision_list_all, recall_list_all \
+            = eval_smooth(config_obj, 100, x)
+        x_list.append(x)
+        acc_list.append(acc_all)
+        pre_list.append(precision_all)
+        rec_list.append(recall_all)
+        f1_list.append(f1_all)
+    y_list.append(acc_list)
+    y_list.append(pre_list)
+    y_list.append(rec_list)
+    y_list.append(f1_list)
+    plot_show.show_plot(x_list, y_list, y_name_list=['acc', 'pre', 'rec', 'f1'], color_list=plot_show.COLOR_LIST)
 
 
 if __name__ == '__main__':
@@ -414,13 +437,11 @@ if __name__ == '__main__':
     # PIC_SAVE_ROOT_PATH = 'E:/test_data/divide_path_20180621/'
 
 
-    #picDevider.devide_pic(pic_src_path, pic_des_path_devider, excel_path, picDevider.materials, 1000)
-    #process_img.check_and_convert(pic_des_path_devider, pic_des_path_tfrecord, label_dim, 6)
-    #eval_smooth('chamo_full_run', 100)
-    #eval_smooth_divide(config_obj, PIC_SAVE_ROOT_PATH, 5)
-
-
-    eval_pic_path = 'E:/test_data/myevalpics/pics1/1.jpg'
+    # picDevider.devide_pic(pic_src_path, pic_des_path_devider, excel_path, picDevider.materials, 1000)
+    # process_img.check_and_convert(pic_des_path_devider, pic_des_path_tfrecord, label_dim, 6)
+    # threshold_show()
+    # eval_smooth_divide(config_obj, PIC_SAVE_ROOT_PATH, 5)
+    eval_pic_path = 'E:/test_data/myevalpics/pics1/2.jpg'
     eval_one_pic(eval_pic_path, label_dim)
 
 

@@ -19,7 +19,7 @@ channels = 1
 
 # optional hyperparameter settings
 config = {
-    "N" : 8,
+    "N" : 1,
     "EPS" : 1e-7,
     "K5X5" : K5X5,
     "MAX_IMAGES" : 1,
@@ -61,7 +61,7 @@ def parse_tensors_dict(graph, layer_name, value_feed_dict):
     feed_dict = {}
     with graph.as_default() as g:
         # get op of name given in method argument layer_name
-        op = get_operation(graph = g, name = layer_name)
+        op = get_operation(graph=g, name=layer_name)
         op_tensor = op.outputs[0] # output tensor of the operation
         tensor_shape = op_tensor.get_shape().as_list() # get shape of tensor
 
@@ -82,8 +82,8 @@ def parse_tensors_dict(graph, layer_name, value_feed_dict):
             feed_dict[tmp] = value
             x.append(tmp)
 
-        # brick 这里就很欢乐了，这里默认第一个就是图，如果说根本就没用feed_dict的话，这里就报错崩了，估计作者没遇到过没用feed_dict的情况
-        # 因为这里是按照feed_dict的顺序挨个从sess里面读取tensor，然而我根本没用feed_dict，开心又愉快啊
+        # brick 这里有一些问题，这里默认第一个就是图，如果说根本就没用feed_dict的话，这里就报错崩了，估计作者没遇到过没用feed_dict的情况
+        # 因为这里是按照feed_dict的顺序挨个从sess里面读取tensor，然而我根本没用feed_dict，所以运行到这里会直接崩溃
         if len(x) > 0: # brick add
             X_in = x[0]
             feed_dict[X_in] = feed_dict[X_in][:config["MAX_IMAGES"]] # only taking first MAX_IMAGES from given images array

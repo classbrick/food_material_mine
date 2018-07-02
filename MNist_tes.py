@@ -53,10 +53,12 @@ with sess.as_default():
             print("test accuracy %g" % accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
     else:
         batch = mnist.train.next_batch(50)
+        feed_dict_x = batch[0]
+        feed_dict_y = batch[1]
         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y_: batch[1]})
         print("eval training accuracy %g" % train_accuracy)
         train_step.run(feed_dict={x: batch[0], y_: batch[1]})
-    print("test accuracy %g" % accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
+    # print("test accuracy %g" % accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
     temp1 = batch[0][1:2]
     temp2 = batch[1][1:2]
     feed_dict = {x: batch[0][1:2], y_: batch[1][1:2]}

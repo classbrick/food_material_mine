@@ -11,6 +11,8 @@ import accuracy.default_accuracy
 import accuracy.multi_accuracy
 import optimizer.default_opt
 import utils.data_helper
+import tensorflow as tf
+
 
 config_name=sys.argv[1]
 print('choose config: '+config_name)
@@ -68,12 +70,20 @@ if opt_name=='default':
         config_obj.ckpt_name
     )
 
-images, labels = preprocess_obj.def_preposess()
+
+image_train_p = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
+label_train_p = tf.placeholder(shape=[None, config_obj.class_num])
+image_eval_p = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
+label_eval_p = tf.placeholder(shape=[None, config_obj.class_num])
+
+
+image_train, label_train = preprocess_obj.def_preposess()
 #utils.data_helper.check_imgs(images, labels)
-images_test, labels_test = test_preprocess_obj.def_preposess()
-net = net_obj.def_net(images)
-net_test = test_net_obj.def_net(images_test)
-loss = loss_obj.def_loss(net, labels)
-test_accu =accu_obj.def_accuracy(net_test, labels_test)
-opt_obj.run(loss, test_accu)
+image_eval, label_eval = test_preprocess_obj.def_preposess()
+net = net_obj.def_net(image_train_p)
+net_eval = test_net_obj.def_net(image_eval_p)
+loss = loss_obj.def_loss(net, label_train_p)
+test_accu =accu_obj.def_accuracy(net_eval, label_eval_p)
+feed_dict = {image_train_p: image_train, image_eval_p: image_eval, label_train_p: label_train, label_eval_p: label_eval}
+opt_obj.run(loss, test_accu, feed_dict)
 
