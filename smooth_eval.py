@@ -7,6 +7,7 @@ import accuracy.multi_accuracy as multi_accuracy
 import data_scraping.picDevider as picDevider
 import data_convertor.process_img as process_img
 import utils
+import utils.data_helper
 import sys
 import config.chamo
 import config.chamo_full_run
@@ -113,6 +114,67 @@ def eval_smooth_show(config_obj, one_pic_path=None, isDeconv=False):
     if isDeconv:
         #show_cnnvis(sess, feed_dict={X: image_list, Y: tempY}, input_tensor=images_test)
         show_cnnvis(sess, feed_dict={}, input_tensor=images_test)
+
+
+def eval_smooth_tensorboard(config_obj, one_pic_path):
+    net_name=config_obj.net_type
+    test_net_obj=None
+    if net_name=='vgg16':
+        test_net_obj=net.vgg16.vgg16(False, 'vgg16', config_obj.class_num)
+    elif net_name=='mobilenet_v2':
+        test_net_obj=net.mobilenet_v2.mobilenet_v2(False, 'mobilenet_v2', config_obj.class_num)
+
+    accu_name=config_obj.accuracy_type
+    accu_obj=None
+    if accu_name=='default':
+        accu_obj=default_accuracy.default_accuracy()
+    elif accu_name=='multi':
+        accu_obj=multi_accuracy.multi_accuracy()
+
+    images_test_p = tf.placeholder(shape=[config_obj.batchsize, 224, 224, 3], dtype=tf.float32)
+    labels_test_p = tf.placeholder(shape=[config_obj.batchsize, config_obj.class_num], dtype=tf.float32)
+    images_test, labels_test = read_a_pic(one_pic_path, config_obj.class_num)
+    net_test = test_net_obj.def_net(images_test_p)
+    inputs = tf.sigmoid(net_test)
+    predict = tf.cast(inputs > 0.1, tf.float32)
+    accuracy_TOTAL = accu_obj.def_accuracy(net_test, labels_test_p, 0.5)
+
+    saver = tf.train.Saver()
+    img_mean = utils.global_var.means
+    sess = tf.Session()
+
+    writer = tf.summary.FileWriter("Log/", tf.get_default_graph())
+    with sess.as_default():
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+        saver.restore(sess, config_obj.result_addr)
+        feed_dict = {images_test_p: images_test, labels_test_p: labels_test}
+
+        [accu_TOTAL, predict_v] \
+            = sess.run([accuracy_TOTAL, predict], feed_dict=feed_dict)
+        print('len(predict_V):', len(predict_v))
+        for k in range(len(predict_v)):
+            # print(labels_test_v[k])
+            mat_show = []
+            for i in range(len(predict_v[k])):
+                if predict_v[k][i] == 1:
+                    mat_show.append(data_scraping.materil_name_73.material_list[i])
+                    print(str(data_scraping.materil_name_73.material_list[i]))
+            print(predict_v[k])
+            show_img = images_test[k]
+            show_img = show_img+img_mean
+            show_img = abs(show_img) / 256.0
+            plt.imshow(show_img)
+            # zhfont = matplotlib.font_manager.FontProperties(
+            # fname='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
+            for i in range(len(mat_show)):
+                plt.text(150, 25*(i+1), str(mat_show[i]), fontproperties='Simhei', fontsize=15, color='red')
+            plt.show()
+
+        coord.request_stop()
+        coord.join(threads)
+    writer.close()
+    show_cnnvis(sess, feed_dict=feed_dict, input_tensor=images_test_p)
 
 
 def eval_smooth(config_obj, repeat_time, threshold=0.5):
@@ -392,10 +454,26 @@ def eval_one_pic(pic_path, label_dim):
     eval_smooth_show(config_obj, new_pic_path, True)
 
 
-def read_a_pic(pic_path):
+
+def eval_one_pic_tensorboard(pic_path, label_dim):
+    config_obj = get_config('chamo_full_run')
+    config_obj.batchsize = 1
+    eval_smooth_tensorboard(config_obj, pic_path)
+
+def read_a_pic(pic_path, dim):
     img = cv2.imread(pic_path)
     img = cv2.resize(img, dsize=(224, 224))
-    return img
+    img_list = []
+    img_list.append(img)
+    pic_base = os.path.basename(pic_path)
+    items = pic_base.split('_')
+    if len(items) > 2:
+        label = utils.data_helper.num2label(int(items[1]), dim)
+        labels = []
+        labels.append(label)
+    else:
+        labels = np.zeros([1, dim], dtype=np.float32)
+    return img_list, labels
 
 
 def rand_tag_pic(pic_path, num):
@@ -442,6 +520,6 @@ if __name__ == '__main__':
     # threshold_show()
     # eval_smooth_divide(config_obj, PIC_SAVE_ROOT_PATH, 5)
     eval_pic_path = 'E:/test_data/myevalpics/pics1/2.jpg'
-    eval_one_pic(eval_pic_path, label_dim)
+    eval_one_pic_tensorboard(eval_pic_path, label_dim)
 
 

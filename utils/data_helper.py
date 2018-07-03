@@ -181,6 +181,22 @@ def is_file_exist(file, des_path):
                 return True, f_path
     return False, None
 
+
 def is_same_file(file_l, file_r):
     return filecmp.cmp(file_l, file_r)
 
+
+def num2label(num, dim):
+    ret = []
+    for i in range(dim):
+        if (num & pow(2, dim-i-1))!=0:
+            ret.append(1)
+        else:
+            ret.append(0)
+    return ret
+
+
+if __name__ == '__main__':
+    num = 1
+    dim = 2
+    print(num2label(num, dim))

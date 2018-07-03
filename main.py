@@ -71,19 +71,18 @@ if opt_name=='default':
     )
 
 
-image_train_p = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
-label_train_p = tf.placeholder(shape=[None, config_obj.class_num])
-image_eval_p = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
-label_eval_p = tf.placeholder(shape=[None, config_obj.class_num])
+# image_train_p = tf.placeholder(shape=[config_obj.batchsize, 224, 224, 3], dtype=tf.float32)
+# label_train_p = tf.placeholder(shape=[config_obj.batchsize, config_obj.class_num], dtype=tf.float32)
+# image_eval_p = tf.placeholder(shape=[config_obj.batchsize, 224, 224, 3], dtype=tf.float32)
+# label_eval_p = tf.placeholder(shape=[config_obj.batchsize, config_obj.class_num], dtype=tf.float32)
 
 
 image_train, label_train = preprocess_obj.def_preposess()
 #utils.data_helper.check_imgs(images, labels)
 image_eval, label_eval = test_preprocess_obj.def_preposess()
-net = net_obj.def_net(image_train_p)
-net_eval = test_net_obj.def_net(image_eval_p)
-loss = loss_obj.def_loss(net, label_train_p)
-test_accu =accu_obj.def_accuracy(net_eval, label_eval_p)
-feed_dict = {image_train_p: image_train, image_eval_p: image_eval, label_train_p: label_train, label_eval_p: label_eval}
-opt_obj.run(loss, test_accu, feed_dict)
+net = net_obj.def_net(image_train)
+net_eval = test_net_obj.def_net(image_eval)
+loss = loss_obj.def_loss(net, label_train)
+test_accu =accu_obj.def_accuracy(net_eval, label_eval, 0.5)
+opt_obj.run(loss, test_accu)
 

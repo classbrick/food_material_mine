@@ -7,7 +7,7 @@ class multi_accuracy:
         print('choose multi_accuracy')
 
 
-    def def_accuracy(self, inputs, labels):
+    def def_accuracy(self, inputs, labels, threshold):
         '''
         get the accuracy_total, acc_list, precision and recall of the inputs
         :param inputs:
@@ -20,7 +20,7 @@ class multi_accuracy:
         '''
         inputs = tf.sigmoid(inputs)
         in_shape = inputs.get_shape().as_list()
-        inputs = tf.cast(inputs > 0.5, tf.float32)
+        inputs = tf.cast(inputs > threshold, tf.float32)
         acc_perfect = tf.reduce_mean(tf.cast(tf.reduce_sum(tf.abs(labels - inputs), axis=1) < 0.1, tf.float32))
         accuracy = tf.reduce_mean(tf.cast(tf.equal(labels, inputs), tf.float32))
         precision = tf.divide(
@@ -35,6 +35,7 @@ class multi_accuracy:
         pre_list_nume = tf.reduce_sum(inputs, axis=0) \
                         - tf.reduce_sum(tf.cast(inputs - labels >= 1, tf.float32), axis=0)
         pre_list_deno = tf.reduce_sum(inputs, axis=0)
+        # 此处labels-inputs>=1的含义是真实值为1而预测值不为1，可以得出没有召回的标签
         recall_list = tf.divide(
             tf.reduce_sum(labels, axis=0) - tf.reduce_sum(tf.cast(labels - inputs >= 1, tf.float32), axis=0),
             tf.reduce_sum(labels, axis=0))
