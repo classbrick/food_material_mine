@@ -1,6 +1,6 @@
 import tensorflow as tf
 import config
-import data_preprocessing
+import data_preprocessing.image_preprocess
 import net
 import accuracy.default_accuracy as default_accuracy
 import accuracy.multi_accuracy as multi_accuracy
@@ -26,6 +26,7 @@ import tf_cnnvis.tf_cnnvis as tf_cnnvis
 import random
 import cv2
 import utils.plot_show as plot_show
+import imutils
 
 
 excel_path = '/home/leo/Documents/chamo/food_material/V1.1.0.0525.xlsx'
@@ -133,7 +134,7 @@ def eval_smooth_tensorboard(config_obj, one_pic_path):
 
     images_test_p = tf.placeholder(shape=[config_obj.batchsize, 224, 224, 3], dtype=tf.float32)
     labels_test_p = tf.placeholder(shape=[config_obj.batchsize, config_obj.class_num], dtype=tf.float32)
-    images_test, labels_test = read_a_pic(one_pic_path, config_obj.class_num)
+    images_test, labels_test = read_a_pic_reconstruct_slim(one_pic_path, config_obj.class_num)
     net_test = test_net_obj.def_net(images_test_p)
     inputs = tf.sigmoid(net_test)
     predict = tf.cast(inputs > 0.1, tf.float32)
@@ -507,6 +508,96 @@ def threshold_show():
     plot_show.show_plot(x_list, y_list, y_name_list=['acc', 'pre', 'rec', 'f1'], color_list=plot_show.COLOR_LIST)
 
 
+def eval_reconstruct_slim(config_obj, one_pic_path):
+    '''
+    对slim的图片预处理进行了重现
+    :param config_obj:
+    :param one_pic_path:
+    :return:
+    '''
+    net_name = config_obj.net_type
+    test_net_obj = None
+    if net_name == 'vgg16':
+        test_net_obj = net.vgg16.vgg16(False, 'vgg16', config_obj.class_num)
+    elif net_name == 'mobilenet_v2':
+        test_net_obj = net.mobilenet_v2.mobilenet_v2(False, 'mobilenet_v2', config_obj.class_num)
+
+    accu_name = config_obj.accuracy_type
+    accu_obj = None
+    if accu_name == 'default':
+        accu_obj = default_accuracy.default_accuracy()
+    elif accu_name == 'multi':
+        accu_obj = multi_accuracy.multi_accuracy()
+
+    images_test_p = tf.placeholder(shape=[config_obj.batchsize, 224, 224, 3], dtype=tf.float32)
+    labels_test_p = tf.placeholder(shape=[config_obj.batchsize, config_obj.class_num], dtype=tf.float32)
+    images_test, labels_test = read_a_pic_reconstruct_slim(one_pic_path, config_obj.class_num)
+    net_test = test_net_obj.def_net(images_test_p)
+    inputs = tf.sigmoid(net_test)
+    predict = tf.cast(inputs > 0.1, tf.float32)
+    accuracy_TOTAL = accu_obj.def_accuracy(net_test, labels_test_p, 0.5)
+
+    saver = tf.train.Saver()
+    img_mean = utils.global_var.means
+    sess = tf.Session()
+
+    writer = tf.summary.FileWriter("Log/", tf.get_default_graph())
+    with sess.as_default():
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+        saver.restore(sess, config_obj.result_addr)
+        feed_dict = {images_test_p: images_test, labels_test_p: labels_test}
+
+        [accu_TOTAL, predict_v] \
+            = sess.run([accuracy_TOTAL, predict], feed_dict=feed_dict)
+        print('len(predict_V):', len(predict_v))
+        for k in range(len(predict_v)):
+            # print(labels_test_v[k])
+            mat_show = []
+            for i in range(len(predict_v[k])):
+                if predict_v[k][i] == 1:
+                    mat_show.append(data_scraping.materil_name_73.material_list[i])
+                    print(str(data_scraping.materil_name_73.material_list[i]))
+            print(predict_v[k])
+            show_img = images_test[k]
+            show_img = np.array(show_img)
+            # show_img = show_img + img_mean
+            # show_img = abs(show_img) / 256.0
+            # show_img = map(abs, show_img)
+            # show_img = [i/256.0 for i in show_img]
+            # plt.imshow(show_img)
+            plt.imshow(show_img)
+            # zhfont = matplotlib.font_manager.FontProperties(
+            # fname='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
+            for i in range(len(mat_show)):
+                plt.text(150, 25 * (i + 1), str(mat_show[i]), fontproperties='Simhei', fontsize=15, color='red')
+            plt.show()
+
+        coord.request_stop()
+        coord.join(threads)
+    writer.close()
+    show_cnnvis(sess, feed_dict=feed_dict, input_tensor=images_test_p)
+
+
+def read_a_pic_reconstruct_slim(pic_path, dim):
+    img = cv2.imread(pic_path)
+    train_image_size = utils.global_var._RESIZE_SIDE_MIN
+    img = data_preprocessing.image_preprocess.preprocess_for_test(img, train_image_size, train_image_size)
+    img = imutils.opencv2matplotlib(img)
+    img_list = []
+    img = list(img)
+    img_list.append(img)
+    pic_base = os.path.basename(pic_path)
+    items = pic_base.split('_')
+    if len(items) > 2:
+        label = utils.data_helper.num2label(int(items[1]), dim)
+        labels = []
+        labels.append(label)
+    else:
+        labels = np.zeros([1, dim], dtype=np.float32)
+    return img_list, labels
+
+
 if __name__ == '__main__':
     config_obj = get_config('chamo_full_run')
     # 自己要设置临时路径就打开这个
@@ -519,7 +610,7 @@ if __name__ == '__main__':
     # process_img.check_and_convert(pic_des_path_devider, pic_des_path_tfrecord, label_dim, 6)
     # threshold_show()
     # eval_smooth_divide(config_obj, PIC_SAVE_ROOT_PATH, 5)
-    eval_pic_path = 'E:/test_data/myevalpics/pics1/2.jpg'
-    eval_one_pic_tensorboard(eval_pic_path, label_dim)
-
+    eval_pic_path = 'E:/test_data/myevalpics/pics1/1.jpg'
+    eval_reconstruct_slim(config_obj, eval_pic_path)
+    # eval_one_pic_tensorboard(eval_pic_path, label_dim)
 
