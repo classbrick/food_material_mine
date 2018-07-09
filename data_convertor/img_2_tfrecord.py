@@ -47,9 +47,11 @@ def convert_a_folder(folder_name,file_root,tfrecord_root,lable_bit):
                 continue
     tfrecord_writer.close()
 
+
 def convert_folders(folder_list,file_root,tfrecord_root,lable_bit):
     for item in folder_list:
         convert_a_folder(item,file_root,tfrecord_root,lable_bit)
+
 
 def main(file_root, tfrecord_root, lable_bit, thread_count):
     '''
@@ -80,6 +82,6 @@ def main(file_root, tfrecord_root, lable_bit, thread_count):
     p = Pool()
     for i in range(thread_count):
         print(folder_lists[i])
-        p.apply_async(convert_folders, args=(folder_lists[i],file_root,tfrecord_root,lable_bit,))
+        p.apply_async(convert_folders, args=(folder_lists[i], file_root, tfrecord_root, lable_bit,))
     p.close()
     p.join()

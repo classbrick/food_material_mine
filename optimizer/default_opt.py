@@ -37,10 +37,10 @@ class default_opt:
             if self.loading_his:
                 saver.restore(sess, self.result_addr+self.ckpt_name+'/chamo.ckpt')
             writer = tf.summary.FileWriter("logs/", sess.graph)
-            i =-1
+            i = -1
             while True:
                 before_time = time.perf_counter()
-                i=i+1
+                i = i+1
                 sess.run(train_step)
                 after_time = time.perf_counter()
                 step_time = after_time - before_time

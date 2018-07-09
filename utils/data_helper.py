@@ -4,6 +4,7 @@ import utils.global_var
 import os
 import filecmp
 
+
 def _crop(image, offset_height, offset_width, crop_height, crop_width):
     original_shape = tf.shape(image)
     rank_assertion = tf.Assert(tf.equal(tf.rank(image), 3),['Rank of image must be equal to 3.'])
@@ -19,6 +20,7 @@ def _crop(image, offset_height, offset_width, crop_height, crop_width):
         image = tf.slice(image, offsets, cropped_shape)
     return tf.reshape(image, cropped_shape)
 
+
 def _central_crop(image_list, crop_height, crop_width):
     outputs = []
     for image in image_list:
@@ -31,6 +33,7 @@ def _central_crop(image_list, crop_height, crop_width):
         outputs.append(_crop(image, offset_height, offset_width,
                              crop_height, crop_width))
     return outputs
+
 
 def _random_crop(image_list, crop_height, crop_width):
     if not image_list:
@@ -83,27 +86,30 @@ def _random_crop(image_list, crop_height, crop_width):
 
     return [_crop(image, offset_height, offset_width, crop_height, crop_width) for image in image_list]
 
+
 def _smallest_size_at_least(height, width, smallest_side):
     smallest_side = tf.convert_to_tensor(smallest_side, dtype=tf.int32)
     height = tf.to_float(height)
     width = tf.to_float(width)
     smallest_side = tf.to_float(smallest_side)
-    scale = tf.cond(tf.greater(height, width),lambda: smallest_side / width,lambda: smallest_side / height)
+    scale = tf.cond(tf.greater(height, width), lambda: smallest_side / width, lambda: smallest_side / height)
     new_height = tf.to_int32(tf.rint(height * scale))
     new_width = tf.to_int32(tf.rint(width * scale))
     return new_height, new_width
+
 
 def _aspect_preserving_resize(image, smallest_side):
     smallest_side = tf.convert_to_tensor(smallest_side, dtype=tf.int32)
     shape = tf.shape(image)
     height = shape[0]
     width = shape[1]
-    new_height, new_width = _smallest_size_at_least(height, width, smallest_side)
-    image = tf.expand_dims(image, 0)
-    resized_image = tf.image.resize_bilinear(image, [new_height, new_width],align_corners=False)
+    new_height, new_width = _smallest_size_at_least(height, width, smallest_side) # 按照更长的边与smallest_side的比例来做变换
+    image = tf.expand_dims(image, 0) # 将tensor的dim变换，从[224, 224, 3]变到[1, 224, 224, 3]
+    resized_image = tf.image.resize_bilinear(image, [new_height, new_width], align_corners=False)
     resized_image = tf.squeeze(resized_image)
     resized_image.set_shape([None, None, 3])
     return resized_image
+
 
 def _mean_image_subtraction(image):
     means = utils.global_var.means
@@ -142,6 +148,7 @@ def get_raw_img(tfrecord_addr, class_num):
     image = tf.reshape(image, [height, width, channel])
     label = tf.cast(features['label'], tf.float32)
     return image, label
+
 
 def check_imgs(images, labels):
     img_mean = utils.global_var.means
